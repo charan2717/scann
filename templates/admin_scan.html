@@ -5,13 +5,14 @@
 <title>Admin Scan</title>
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <style>
-  #reader { width: 300px; margin-bottom: 20px; }
+  #reader { width: 300px; margin-bottom: 20px; display: none; }
   #manual { margin-top: 20px; }
 </style>
 </head>
 <body>
 <h1>Scan QR Code or Enter Reg No</h1>
 
+<button id="start-scan-btn">Start QR Scan</button>
 <div id="reader"></div>
 <div id="scan-result"></div>
 
@@ -23,7 +24,23 @@
 <div id="record-details" style="margin-top:20px;"></div>
 
 <script>
+let html5QrcodeScanner = null;
 let lastRegNo = "";
+
+// Function to start scanning
+document.getElementById("start-scan-btn").addEventListener("click", () => {
+    const readerDiv = document.getElementById("reader");
+    readerDiv.style.display = "block";
+    
+    html5QrcodeScanner = new Html5Qrcode("reader");
+    html5QrcodeScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        onScanSuccess,
+        onScanError
+    );
+    document.getElementById("start-scan-btn").disabled = true;
+});
 
 function onScanSuccess(decodedText, decodedResult) {
     if(decodedText !== lastRegNo) {
@@ -33,14 +50,6 @@ function onScanSuccess(decodedText, decodedResult) {
 }
 
 function onScanError(errorMessage) {}
-
-let html5QrcodeScanner = new Html5Qrcode("reader");
-html5QrcodeScanner.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: 250 },
-    onScanSuccess,
-    onScanError
-);
 
 async function fetchRecord(manualRegNo = null) {
     const regno = manualRegNo || document.getElementById("regno-input").value.trim();
