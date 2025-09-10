@@ -3,73 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <title>Admin QR Scan</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    <style>
-        #reader {
-            width: 100%;
-            max-width: 500px;
-            margin: auto;
-        }
-    </style>
+    <script src="https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
 </head>
 <body>
 <div class="container mt-4">
-    <h3>QR Code Scanner</h3>
-    <div id="reader"></div>
-    <hr>
-    <h4>Result</h4>
-    <div id="result"></div>
+    <h2>Admin QR Scan & Approve</h2>
+    <div id="qr-reader" style="width: 500px;"></div>
+    <div id="record-info" class="mt-4" style="display:none;">
+        <h4>Record Details</h4>
+        <p><strong>Name:</strong> <span id="rec-name"></span></p>
+        <p><strong>Reg No:</strong> <span id="rec-regno"></span></p>
+        <p><strong>Email:</strong> <span id="rec-email"></span></p>
+        <button id="approve-btn" class="btn btn-success">Approve</button>
+    </div>
 </div>
 
 <script>
-    function displayRecord(data) {
-        const resultDiv = document.getElementById('result');
-        let html = '<table class="table table-bordered">';
-        for (const key in data.data) {
-            html += `<tr><th>${key}</th><td>${data.data[key]}</td></tr>`;
-        }
-        html += `<tr><th>Status</th><td>${data.status}</td></tr>`;
-        if (data.status === 'pending') {
-            html += `<tr><td colspan="2">
-                        <button class="btn btn-success" onclick="approveRecord('${data.data['Reg No']}')">Approve</button>
-                     </td></tr>`;
-        }
-        html += '</table>';
-        resultDiv.innerHTML = html;
-    }
+let lastScanned = null;
 
-    async function fetchRecord(regno) {
-        try {
-            const res = await fetch(`/api/get_by_regno/${regno}`);
-            if (!res.ok) throw new Error('Record not found');
-            const data = await res.json();
-            displayRecord(data);
-        } catch (err) {
-            document.getElementById('result').innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
-        }
-    }
+function showRecord(record) {
+    document.getElementById('rec-name').innerText = record.data.Name;
+    document.getElementById('rec-regno').innerText = record.data['Reg No'];
+    document.getElementById('rec-email').innerText = record.data.Mail;
+    document.getElementById('record-info').style.display = 'block';
+}
 
-    async function approveRecord(regno) {
-        try {
-            const res = await fetch(`/api/approve/${regno}`, { method: 'POST' });
-            if (!res.ok) throw new Error('Failed to approve');
-            alert('Record approved successfully!');
-            fetchRecord(regno);
-        } catch (err) {
-            alert(err.message);
-        }
+async function fetchRecord(regno) {
+    try {
+        const res = await fetch(`/api/get_by_regno/${regno}`, {
+            credentials: 'same-origin'
+        });
+        if (!res.ok) throw new Error('Record not found or not pending.');
+        const data = await res.json();
+        showRecord(data);
+        lastScanned = data.data['Reg No'];
+    } catch (err) {
+        alert(err.message);
+        lastScanned = null;
+        document.getElementById('record-info').style.display = 'none';
     }
+}
 
-    function onScanSuccess(decodedText, decodedResult) {
-        // decodedText is the text from QR code
+async function approveRecord() {
+    if (!lastScanned) return;
+    try {
+        const res = await fetch(`/api/approve/${lastScanned}`, {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        if (!res.ok) throw new Error('Failed to approve record.');
+        alert('Record approved successfully!');
+        document.getElementById('record-info').style.display = 'none';
+        lastScanned = null;
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+document.getElementById('approve-btn').addEventListener('click', approveRecord);
+
+function onScanSuccess(decodedText, decodedResult) {
+    if (decodedText && decodedText !== lastScanned) {
         fetchRecord(decodedText);
-        html5QrcodeScanner.clear(); // stop scanning after successful scan
     }
+}
 
-    const html5QrcodeScanner = new Html5QrcodeScanner(
-        "reader", { fps: 10, qrbox: 250 });
-    html5QrcodeScanner.render(onScanSuccess);
+function onScanFailure(error) {
+    // console.warn(`QR scan failed: ${error}`);
+}
+
+let html5QrcodeScanner = new Html5Qrcode("qr-reader");
+html5QrcodeScanner.start(
+    { facingMode: "environment" }, 
+    {
+        fps: 10,
+        qrbox: 250
+    },
+    onScanSuccess,
+    onScanFailure
+).catch(err => console.error(err));
 </script>
 </body>
 </html>
