@@ -9,7 +9,15 @@
 <body>
 <div class="container mt-4">
     <h2>Admin QR Scan & Approve</h2>
-    <div id="qr-reader" style="width: 500px;"></div>
+
+    <div id="qr-reader" style="width: 500px; margin-bottom:20px;"></div>
+
+    <div>
+        <label for="manual-regno">Or enter Reg No manually:</label>
+        <input type="text" id="manual-regno" class="form-control" placeholder="Enter Reg No">
+        <button id="manual-btn" class="btn btn-primary mt-2">Fetch Record</button>
+    </div>
+
     <div id="record-info" class="mt-4" style="display:none;">
         <h4>Record Details</h4>
         <p><strong>Name:</strong> <span id="rec-name"></span></p>
@@ -62,7 +70,12 @@ async function approveRecord() {
 }
 
 document.getElementById('approve-btn').addEventListener('click', approveRecord);
+document.getElementById('manual-btn').addEventListener('click', () => {
+    const val = document.getElementById('manual-regno').value.trim();
+    if (val) fetchRecord(val);
+});
 
+// QR scanner
 function onScanSuccess(decodedText, decodedResult) {
     if (decodedText && decodedText !== lastScanned) {
         fetchRecord(decodedText);
@@ -70,7 +83,7 @@ function onScanSuccess(decodedText, decodedResult) {
 }
 
 function onScanFailure(error) {
-    // console.warn(`QR scan failed: ${error}`);
+    // optional: console.log(error);
 }
 
 let html5QrcodeScanner = new Html5Qrcode("qr-reader");
