@@ -1,51 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Admin QR Scan</title>
-    <script src="https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Scan & Approve</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<style>
+    #preview {
+        width: 100%;
+        max-width: 400px;
+        margin: 10px auto;
+        border: 1px solid #ccc;
+    }
+    #record-info {
+        margin-top: 20px;
+    }
+</style>
 </head>
-<body>
-<div class="container mt-4">
-    <h2>Admin QR Scan & Approve</h2>
+<body class="p-4">
 
-    <div id="qr-reader" style="width: 500px; margin-bottom:20px;"></div>
+<div class="container">
+    <h2 class="mb-3">Scan QR Code or Enter Registration No.</h2>
 
-    <div>
-        <label for="manual-regno">Or enter Reg No manually:</label>
-        <input type="text" id="manual-regno" class="form-control" placeholder="Enter Reg No">
-        <button id="manual-btn" class="btn btn-primary mt-2">Fetch Record</button>
+    <!-- Camera preview for QR scanning -->
+    <video id="preview"></video>
+
+    <!-- Manual input -->
+    <div class="mb-3 mt-3">
+        <label for="manualReg" class="form-label">Enter Reg No manually:</label>
+        <input type="text" id="manualReg" class="form-control" placeholder="e.g., 24bca7687">
+        <button class="btn btn-primary mt-2" onclick="fetchRecordManual()">Fetch Record</button>
     </div>
 
-    <div id="record-info" class="mt-4" style="display:none;">
-        <h4>Record Details</h4>
+    <!-- Display scanned/fetched record -->
+    <div id="record-info" class="card p-3" style="display:none;">
+        <h5>Record Details:</h5>
         <p><strong>Name:</strong> <span id="rec-name"></span></p>
         <p><strong>Reg No:</strong> <span id="rec-regno"></span></p>
         <p><strong>Email:</strong> <span id="rec-email"></span></p>
-        <button id="approve-btn" class="btn btn-success">Approve</button>
+        <button class="btn btn-success" onclick="approveRecord()">Approve</button>
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.12/html5-qrcode.min.js"></script>
 <script>
 let lastScanned = null;
 
-function showRecord(record) {
-    document.getElementById('rec-name').innerText = record.data.Name;
-    document.getElementById('rec-regno').innerText = record.data['Reg No'];
-    document.getElementById('rec-email').innerText = record.data.Mail;
-    document.getElementById('record-info').style.display = 'block';
+// QR scanner setup
+const html5QrcodeScanner = new Html5Qrcode("preview");
+function onScanSuccess(decodedText, decodedResult) {
+    lastScanned = decodedText.trim();
+    fetchRecord(lastScanned);
+    html5QrcodeScanner.stop().catch(err => console.warn('Stop failed', err));
 }
 
+function onScanError(errorMessage) {
+    // console.log("QR Scan Error:", errorMessage);
+}
+
+Html5Qrcode.getCameras().then(cameras => {
+    if (cameras && cameras.length) {
+        html5QrcodeScanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 250 },
+            onScanSuccess,
+            onScanError
+        );
+    }
+}).catch(err => console.error("Camera error:", err));
+
+// Fetch record via API
 async function fetchRecord(regno) {
     try {
-        const res = await fetch(`/api/get_by_regno/${regno}`, {
-            credentials: 'same-origin'
-        });
-        if (!res.ok) throw new Error('Record not found or not pending.');
+        const res = await fetch(`/api/get_by_regno/${regno}`);
         const data = await res.json();
-        showRecord(data);
-        lastScanned = data.data['Reg No'];
+        if (!res.ok) throw new Error(data.error || "Record not found");
+
+        // Populate record info
+        document.getElementById('record-info').style.display = 'block';
+        document.getElementById('rec-name').textContent = data.data.Name || data.data.name;
+        document.getElementById('rec-regno').textContent = data.data['Reg No'] || data.regno;
+        document.getElementById('rec-email').textContent = data.data.Mail || data.data.email;
+
+        lastScanned = data.regno || data.data['Reg No'] || data.data.name;
+
     } catch (err) {
         alert(err.message);
         lastScanned = null;
@@ -53,49 +91,34 @@ async function fetchRecord(regno) {
     }
 }
 
+// Manual fetch
+function fetchRecordManual() {
+    const regno = document.getElementById('manualReg').value.trim();
+    if (!regno) return alert("Enter registration number");
+    fetchRecord(regno);
+}
+
+// Approve record
 async function approveRecord() {
-    if (!lastScanned) return;
+    if (!lastScanned) return alert("No record selected to approve");
     try {
         const res = await fetch(`/api/approve/${lastScanned}`, {
             method: 'POST',
             credentials: 'same-origin'
         });
-        if (!res.ok) throw new Error('Failed to approve record.');
-        alert('Record approved successfully!');
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Failed to approve record");
+
+        alert("Record approved successfully!");
         document.getElementById('record-info').style.display = 'none';
         lastScanned = null;
+        document.getElementById('manualReg').value = "";
+
     } catch (err) {
         alert(err.message);
     }
 }
-
-document.getElementById('approve-btn').addEventListener('click', approveRecord);
-document.getElementById('manual-btn').addEventListener('click', () => {
-    const val = document.getElementById('manual-regno').value.trim();
-    if (val) fetchRecord(val);
-});
-
-// QR scanner
-function onScanSuccess(decodedText, decodedResult) {
-    if (decodedText && decodedText !== lastScanned) {
-        fetchRecord(decodedText);
-    }
-}
-
-function onScanFailure(error) {
-    // optional: console.log(error);
-}
-
-let html5QrcodeScanner = new Html5Qrcode("qr-reader");
-html5QrcodeScanner.start(
-    { facingMode: "environment" }, 
-    {
-        fps: 10,
-        qrbox: 250
-    },
-    onScanSuccess,
-    onScanFailure
-).catch(err => console.error(err));
 </script>
+
 </body>
 </html>
