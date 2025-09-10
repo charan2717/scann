@@ -26,6 +26,7 @@ db = SQLAlchemy(app)
 # Database Model
 class Registration(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    regno = db.Column(db.String(50), nullable=False, unique=True)
     data = db.Column(db.JSON, nullable=False)
     status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -33,7 +34,6 @@ class Registration(db.Model):
 
 with app.app_context():
     db.create_all()
-
 
 # Helpers
 def login_required(f):
@@ -112,8 +112,7 @@ def upload():
                 continue
 
             # Skip duplicates
-            if Registration.query.filter_by(data={'Reg No': regno}, status='pending').first() \
-                or Registration.query.filter_by(data={'Reg No': regno}, status='approved').first():
+            if Registration.query.filter_by(regno=regno).first():
                 continue
 
             # Generate QR
@@ -123,6 +122,7 @@ def upload():
 
             # Save in DB
             reg = Registration(
+                regno=regno,
                 data=record,
                 status='pending'
             )
@@ -149,14 +149,16 @@ def admin_dashboard():
 def admin_scan():
     return render_template('admin_scan.html')
 
+# API to get record by regno
 @app.route('/api/get_by_regno/<regno>')
 @login_required
 def api_get_by_regno(regno):
-    rec = Registration.query.filter(Registration.data['Reg No'].as_string() == regno).first()
+    rec = Registration.query.filter_by(regno=regno).first()
     if not rec:
         return jsonify({'error': 'not found'}), 404
     return jsonify({'id': rec.id, 'data': rec.data, 'status': rec.status})
 
+# API to approve record by ID
 @app.route('/api/approve/<int:rec_id>', methods=['POST'])
 @login_required
 def api_approve(rec_id):
