@@ -1,0 +1,6 @@
+flask
+flask_sqlalchemy
+openpyxl
+qrcode
+pandas
+python-dotenv
